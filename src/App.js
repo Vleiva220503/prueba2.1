@@ -56,6 +56,7 @@ const App = () => {
     });
 
     newPeer.on('signal', data => {
+      // Enviamos la señal generada al otro lado
       setPeerSignal(JSON.stringify(data));
     });
 
@@ -65,9 +66,15 @@ const App = () => {
       }
     });
 
-    newPeer.signal(JSON.parse(peerSignal));
-    setPeer(newPeer);
-    setCallAccepted(true);
+    // Intentamos establecer la conexión con la señal recibida
+    try {
+      newPeer.signal(JSON.parse(peerSignal));
+      setPeer(newPeer);
+      setCallAccepted(true);
+    } catch (error) {
+      console.error('Error al intentar unirse a la llamada:', error);
+      // Manejar el error según sea necesario
+    }
   };
 
   return (
@@ -83,7 +90,7 @@ const App = () => {
         <Button variant="contained" color="primary" onClick={createCall}>
           Crear llamada
         </Button>
-        <Button variant="contained" color="secondary" onClick={joinCall}>
+        <Button variant="contained" color="secondary" onClick={joinCall} disabled={!peerSignal}>
           Unirse a la llamada
         </Button>
       </Box>
