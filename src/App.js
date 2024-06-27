@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import SimplePeer from 'simple-peer';
 import { Button, TextField, Box, Typography } from '@mui/material';
+import process from 'process'; // Importar process
 
 const App = () => {
   const [myStream, setMyStream] = useState(null);
@@ -8,11 +9,13 @@ const App = () => {
   const [callAccepted, setCallAccepted] = useState(false);
   const [myID, setMyID] = useState('');
   const [peerSignal, setPeerSignal] = useState('');
+  const [incomingSignal, setIncomingSignal] = useState(null);
   const [callID, setCallID] = useState('');
+  const [joinError, setJoinError] = useState('');
 
   const myVideo = useRef();
   const peerVideo = useRef();
-  const connectionRef = useRef();
+  const peerRef = useRef();
 
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -21,6 +24,9 @@ const App = () => {
         if (myVideo.current) {
           myVideo.current.srcObject = stream;
         }
+      })
+      .catch(error => {
+        console.error('Error al acceder a la cámara y al micrófono:', error);
       });
 
     setMyID(generateID());
@@ -33,6 +39,7 @@ const App = () => {
   const createCall = () => {
     const newPeer = new SimplePeer({
       initiator: true,
+      trickle: false,
       stream: myStream,
     });
 
@@ -46,17 +53,28 @@ const App = () => {
       }
     });
 
+    newPeer.on('error', (err) => {
+      console.error('Error en la conexión:', err);
+      setJoinError('Error al crear la llamada.');
+    });
+
     setPeer(newPeer);
+    peerRef.current = newPeer;
   };
 
   const joinCall = () => {
+    if (!peerSignal) {
+      setJoinError('Ingrese una ID válida para unirse a la llamada.');
+      return;
+    }
+
     const newPeer = new SimplePeer({
       initiator: false,
+      trickle: false,
       stream: myStream,
     });
 
     newPeer.on('signal', data => {
-      // Enviamos la señal generada al otro lado
       setPeerSignal(JSON.stringify(data));
     });
 
@@ -66,15 +84,19 @@ const App = () => {
       }
     });
 
-    // Intentamos establecer la conexión con la señal recibida
-    try {
-      newPeer.signal(JSON.parse(peerSignal));
-      setPeer(newPeer);
+    newPeer.on('connect', () => {
+      console.log('Conexión establecida.');
       setCallAccepted(true);
-    } catch (error) {
-      console.error('Error al intentar unirse a la llamada:', error);
-      // Manejar el error según sea necesario
-    }
+    });
+
+    newPeer.on('error', (err) => {
+      console.error('Error en la conexión:', err);
+      setJoinError('Error al intentar unirse a la llamada.');
+    });
+
+    newPeer.signal(JSON.parse(peerSignal));
+    setPeer(newPeer);
+    peerRef.current = newPeer;
   };
 
   return (
@@ -90,7 +112,12 @@ const App = () => {
         <Button variant="contained" color="primary" onClick={createCall}>
           Crear llamada
         </Button>
-        <Button variant="contained" color="secondary" onClick={joinCall} disabled={!peerSignal}>
+        <Button
+          variant="contained"
+          color="secondary"
+          onClick={joinCall}
+          disabled={!callID || callAccepted}
+        >
           Unirse a la llamada
         </Button>
       </Box>
@@ -114,6 +141,8 @@ const App = () => {
           value={peerSignal}
           onChange={(e) => setPeerSignal(e.target.value)}
           disabled={callAccepted}
+          error={!!joinError}
+          helperText={joinError}
         />
       </Box>
     </Box>
